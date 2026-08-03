@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const mqtt = require('mqtt');
-const admin = require('firebase-admin');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getMessaging } = require('firebase-admin/messaging');
 const fs = require('fs');
 const path = require('path');
 
@@ -13,8 +14,8 @@ app.use(express.json());
 // serviceAccount.json, pegado como una sola línea en la variable de
 // entorno de Railway (no subas el archivo al repo).
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+initializeApp({
+  credential: cert(serviceAccount),
 });
 
 // ── Tokens FCM persistidos en disco ────────────────────────────────
@@ -133,7 +134,7 @@ async function sendPushNotification({ title, body, type, extra = {} }) {
   };
 
   try {
-    const response = await admin.messaging().sendEachForMulticast(message);
+    const response = await getMessaging().sendEachForMulticast(message);
     console.log(
       `Notificaciones: ${response.successCount} ok, ${response.failureCount} fallidas`
     );
