@@ -41,6 +41,24 @@ function saveTokens() {
 
 let pushTokens = loadTokens();
 
+// ── Historial de alertas (fuente de verdad, el cliente lo consulta) ─
+const ALERTS_FILE = path.join(__dirname, 'alerts.json');
+
+function loadAlerts() {
+  try {
+    const raw = fs.readFileSync(ALERTS_FILE, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function saveAlertToHistory(type) {
+  const alerts = loadAlerts();
+  alerts.unshift({ type, time: new Date().toISOString() });
+  fs.writeFileSync(ALERTS_FILE, JSON.stringify(alerts.slice(0, 100)), 'utf8');
+}
+
 // ── Conexión MQTT ───────────────────────────────────────────────────
 const mqttClient = mqtt.connect(`mqtts://${process.env.MQTT_HOST}:8883`, {
   username: process.env.MQTT_USER,
@@ -95,6 +113,10 @@ mqttClient.on('error', (err) => {
 
 // ── Mandar notificación push (FCM v1, alta prioridad) ──────────────
 async function sendPushNotification({ title, body, type, extra = {} }) {
+  // Registra la alerta en el historial SIEMPRE, aunque no haya
+  // tokens registrados todavía — así no se pierde el evento.
+  saveAlertToHistory(type === 'FALL_ALERT' ? 'caida' : 'desconexion');
+
   if (pushTokens.size === 0) {
     console.log('No hay tokens registrados');
     return;
@@ -201,6 +223,11 @@ app.post('/register-token', (req, res) => {
 // ── Ruta para ver tokens guardados ──────────────────────────────────
 app.get('/tokens', (req, res) => {
   res.json({ tokens: [...pushTokens], total: pushTokens.size });
+});
+
+// ── Ruta para ver el historial de alertas ────────────────────────────
+app.get('/alerts', (req, res) => {
+  res.json({ alerts: loadAlerts() });
 });
 
 // ── Ruta de prueba ───────────────────────────────────────────────────
