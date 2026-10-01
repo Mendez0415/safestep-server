@@ -44,17 +44,35 @@ let pushTokens = loadTokens();
 // ── Historial de alertas (fuente de verdad, el cliente lo consulta) ─
 const ALERTS_FILE = path.join(__dirname, 'alerts.json');
 
+const ALERT_RETENTION_MS = 12 * 60 * 60 * 1000; // 12 horas
+
+function podarAlertasViejas(alerts) {
+  const ahora = Date.now();
+  const vigentes = alerts.filter((a) => {
+    const antiguedad = ahora - new Date(a.time).getTime();
+    return antiguedad < ALERT_RETENTION_MS;
+  });
+
+  if (vigentes.length !== alerts.length) {
+    fs.writeFileSync(ALERTS_FILE, JSON.stringify(vigentes), 'utf8');
+    console.log(`Se eliminaron ${alerts.length - vigentes.length} alertas con más de 12h`);
+  }
+
+  return vigentes;
+}
+
 function loadAlerts() {
   try {
     const raw = fs.readFileSync(ALERTS_FILE, 'utf8');
-    return JSON.parse(raw);
+    const alerts = JSON.parse(raw);
+    return podarAlertasViejas(alerts);
   } catch {
     return [];
   }
 }
 
 function saveAlertToHistory(type) {
-  const alerts = loadAlerts();
+  const alerts = loadAlerts(); // ya viene podado
   alerts.unshift({ type, time: new Date().toISOString() });
   fs.writeFileSync(ALERTS_FILE, JSON.stringify(alerts.slice(0, 100)), 'utf8');
 }
@@ -236,7 +254,15 @@ app.get('/', (req, res) => {
 });
 
 // ── Iniciar servidor ──────────────────────────────────────────────────
+//const PORT = process.env.PORT || 3000;
+// ── Iniciar servidor ──────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
+// ── Limpieza periódica de alertas viejas ───────────────────────────
+setInterval(() => {
+  loadAlerts(); // solo con llamarlo, ya poda y persiste si hace falta
+}, 30 * 60 * 1000); // revisa cada 30 minutos
+
+// ── Iniciar servidor ──────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✓ Servidor corriendo en puerto ${PORT}`);
 });
